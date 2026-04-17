@@ -1,12 +1,13 @@
+// @ts-nocheck — This is a Deno Edge Function; Deno types are not available in the Node/Next.js TS config
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { Webhook } from "https://esm.sh/standardwebhooks@1.0.0";
 
 // ─── Environment Variables ────────────────────────────────────────────────────
 const SUPABASE_WEBHOOK_SECRET_BASE64 = Deno.env.get("SUPABASE_WEBHOOK_SECRET")!;
 const MSG91_AUTHKEY = Deno.env.get("MSG91_AUTHKEY")!;
-const MSG91_FLOW_ID = Deno.env.get("MSG91_FLOW_ID")!;
+const MSG91_TEMPLATE_NAME = Deno.env.get("MSG91_TEMPLATE_NAME")!;
 
-const MSG91_API_URL = "https://control.msg91.com/api/v5/flow";
+const MSG91_WHATSAPP_URL = "https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type HookPayload = {
@@ -28,7 +29,7 @@ function isTestPhoneNumber(phoneNumber: string): boolean {
 
 // ─── Phone Number Normalization (E.164 for India) ────────────────────────────
 function normalizeToE164(phoneNumber: string): string {
-  let cleaned = phoneNumber.replace(/[^\d+]/g, "");
+  const cleaned = phoneNumber.replace(/[^\d+]/g, "");
   if (!cleaned.startsWith("+")) {
     const digitsOnly = cleaned.replace(/\+/g, "");
     if (digitsOnly.length === 10) return `+91${digitsOnly}`;
@@ -40,21 +41,39 @@ function normalizeToE164(phoneNumber: string): string {
   return cleaned;
 }
 
-// ─── MSG91 SMS Sender ────────────────────────────────────────────────────────
-async function sendViaMSG91(otp: string, toNumber: string) {
+// ─── MSG91 WhatsApp Sender ───────────────────────────────────────────────────
+async function sendViaMSG91WhatsApp(otp: string, toNumber: string) {
+  // MSG91 WhatsApp API expects the number without the '+' prefix
+  const mobiles = toNumber.startsWith("+") ? toNumber.slice(1) : toNumber;
+
   const payload = {
-    template_id: MSG91_FLOW_ID,
-    short_url: "0",
-    recipients: [
-      {
-        mobiles: toNumber,
-        otp: otp,
-        app: "DocExpiry",
+    integrated_number: Deno.env.get("MSG91_WHATSAPP_NUMBER")!,
+    content_type: "template",
+    payload: {
+      messaging_product: "whatsapp",
+      type: "template",
+      template: {
+        name: MSG91_TEMPLATE_NAME,
+        language: {
+          code: "en",
+          policy: "deterministic",
+        },
+        namespace: Deno.env.get("MSG91_WHATSAPP_NAMESPACE") ?? "",
+        to_and_components: [
+          {
+            to: [mobiles],
+            components: {
+              body: [
+                { type: "text", value: otp },
+              ],
+            },
+          },
+        ],
       },
-    ],
+    },
   };
 
-  return fetch(MSG91_API_URL, {
+  return fetch(MSG91_WHATSAPP_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -86,16 +105,16 @@ Deno.serve(async (req) => {
     // 2. Normalize phone number to E.164
     const e164Phone = normalizeToE164(phone);
 
-    // 3. Block test phone numbers from real SMS delivery
+    // 3. Block test phone numbers from real delivery
     if (isTestPhoneNumber(e164Phone)) {
       return new Response(
-        JSON.stringify({ message: "SMS blocked for test number" }),
+        JSON.stringify({ message: "OTP blocked for test number" }),
         { status: 200, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // 4. Send OTP via MSG91
-    const response = await sendViaMSG91(otp, e164Phone);
+    // 4. Send OTP via MSG91 WhatsApp
+    const response = await sendViaMSG91WhatsApp(otp, e164Phone);
 
     if (response.status !== 200) {
       const errorText = await response.text();

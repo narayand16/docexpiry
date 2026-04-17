@@ -64,7 +64,13 @@ export default function SettingsContent() {
     if (!confirm('This will delete all your data including businesses, documents, and preferences. This cannot be undone. Are you sure?')) {
       return
     }
-    // For V1, we just clear localStorage and redirect
+
+    const res = await fetch('/api/businesses', { method: 'DELETE' })
+    if (!res.ok) {
+      setMessage('Failed to clear data. Please try again.')
+      return
+    }
+
     localStorage.clear()
     window.location.href = '/'
   }

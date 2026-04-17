@@ -77,3 +77,32 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ business: data }, { status: 201 });
 }
+
+export async function DELETE() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Delete businesses (cascades to documents → reminder_log via FK)
+  const { error: bizError } = await supabase
+    .from("businesses")
+    .delete()
+    .eq("user_id", user.id);
+
+  if (bizError) {
+    return NextResponse.json({ error: bizError.message }, { status: 500 });
+  }
+
+  // Delete reminder preferences (separate table, keyed on user_id)
+  await supabase
+    .from("reminder_preferences")
+    .delete()
+    .eq("user_id", user.id);
+
+  return NextResponse.json({ success: true });
+}

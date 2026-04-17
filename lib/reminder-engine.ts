@@ -42,62 +42,7 @@ function getReminderMessage(
 }
 
 export async function processReminders() {
-  const supabase = await createServiceClient();
-
-  // Get all documents that need reminders, joined with user preferences
-  const { data: docs, error } = await supabase.rpc(
-    "get_documents_needing_reminders",
-  );
-
-  if (error) {
-    // Fallback: manual query if RPC not available
-    return await processRemindersManual();
-  }
-
-  if (!docs || docs.length === 0) return { sent: 0, errors: 0 };
-
-  let sent = 0;
-  let errors = 0;
-
-  for (const doc of docs as DocumentWithReminder[]) {
-    const reminderTypes = getReminderTypesForDocument(doc);
-
-    for (const reminderType of reminderTypes) {
-      // Check if this specific reminder was already sent
-      const { data: existing } = await supabase
-        .from("reminder_log")
-        .select("id")
-        .eq("document_id", doc.id)
-        .eq("reminder_type", reminderType)
-        .limit(1);
-
-      if (existing && existing.length > 0) continue;
-
-      // Check if user wants this reminder type
-      if (!shouldSendReminder(doc, reminderType)) continue;
-
-      try {
-        const message = getReminderMessage(
-          doc.name,
-          doc.business_name,
-          doc.expiry_date,
-          reminderType,
-        );
-        await sendWhatsAppMessage(doc.phone_number, message);
-
-        await supabase.from("reminder_log").insert({
-          document_id: doc.id,
-          reminder_type: reminderType,
-        });
-
-        sent++;
-      } catch {
-        errors++;
-      }
-    }
-  }
-
-  return { sent, errors };
+  return await processRemindersManual();
 }
 
 function getReminderTypesForDocument(

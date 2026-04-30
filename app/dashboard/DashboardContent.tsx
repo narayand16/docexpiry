@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Document as DocType, Business } from '@/types'
+import { createClient } from '@/lib/supabase/client'
 import BottomNav from '@/components/BottomNav'
 import SummaryBar from '@/components/SummaryBar'
 import DocCard from '@/components/DocCard'
@@ -18,21 +19,26 @@ export default function DashboardContent() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [showOTP, setShowOTP] = useState(false)
 
-  useEffect(() => {
-    setIsAuthenticated(localStorage.getItem('whatsapp_verified') === 'true')
+  useEffect(
+    function loadDashboardData() {
+      const supabase = createClient()
 
-    Promise.all([
-      fetch('/api/businesses').then((r) => r.json()),
-      fetch('/api/documents').then((r) => r.json()),
-    ]).then(([bizData, docData]) => {
-      setBusiness(bizData.business || null)
-      setDocuments(docData.documents || [])
-      setLoading(false)
-    })
-  }, [])
+      Promise.all([
+        fetch('/api/businesses').then((r) => r.json()),
+        fetch('/api/documents').then((r) => r.json()),
+        supabase.from('reminder_preferences').select('phone_number').single(),
+      ]).then(([bizData, docData, prefsResult]) => {
+        setBusiness(bizData.business || null)
+        setDocuments(docData.documents || [])
+        setIsAuthenticated(!!prefsResult.data?.phone_number)
+        setLoading(false)
+      })
+    },
+    [],
+  )
 
   const sorted = [...documents].sort(
-    (a, b) => statusOrder[a.status] - statusOrder[b.status]
+    (a, b) => (statusOrder[a.status] ?? 99) - (statusOrder[b.status] ?? 99)
   )
 
   if (loading) {
@@ -95,7 +101,6 @@ export default function DashboardContent() {
         <OTPModal
           onClose={() => setShowOTP(false)}
           onVerified={() => {
-            localStorage.setItem('whatsapp_verified', 'true')
             setShowOTP(false)
             setIsAuthenticated(true)
           }}

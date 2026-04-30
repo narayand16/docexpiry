@@ -1,7 +1,6 @@
 'use client'
 
-import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useOTPVerification } from '@/hooks/useOTPVerification'
 
 interface OTPModalProps {
   onClose: () => void
@@ -9,78 +8,17 @@ interface OTPModalProps {
 }
 
 export default function OTPModal({ onClose, onVerified }: OTPModalProps) {
-  const [phone, setPhone] = useState('')
-  const [otp, setOtp] = useState('')
-  const [step, setStep] = useState<'phone' | 'otp'>('phone')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  const supabase = createClient()
-
-  const handleSendOTP = async () => {
-    if (!phone || phone.length < 10) {
-      setError('Enter a valid phone number')
-      return
-    }
-
-    setLoading(true)
-    setError('')
-
-    const formattedPhone = phone.startsWith('+') ? phone : `+91${phone}`
-
-    const { error: otpError } = await supabase.auth.signInWithOtp({
-      phone: formattedPhone,
-    })
-
-    setLoading(false)
-
-    if (otpError) {
-      setError(otpError.message)
-      return
-    }
-
-    setStep('otp')
-  }
-
-  const handleVerifyOTP = async () => {
-    if (!otp || otp.length < 6) {
-      setError('Enter the 6-digit OTP')
-      return
-    }
-
-    setLoading(true)
-    setError('')
-
-    const formattedPhone = phone.startsWith('+') ? phone : `+91${phone}`
-
-    const { error: verifyError } = await supabase.auth.verifyOtp({
-      phone: formattedPhone,
-      token: otp,
-      type: 'sms',
-    })
-
-    setLoading(false)
-
-    if (verifyError) {
-      setError(verifyError.message)
-      return
-    }
-
-    // Save phone to reminder preferences
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      await supabase.from('reminder_preferences').upsert({
-        user_id: user.id,
-        phone_number: formattedPhone,
-        remind_90_days: true,
-        remind_30_days: true,
-        remind_7_days: true,
-        remind_1_day: true,
-      }, { onConflict: 'user_id' })
-    }
-
-    onVerified()
-  }
+  const {
+    phone,
+    otp,
+    step,
+    loading,
+    error,
+    setPhone,
+    setOtp,
+    sendOTP,
+    verifyOTP,
+  } = useOTPVerification(onVerified)
 
   return (
     <>
@@ -104,9 +42,9 @@ export default function OTPModal({ onClose, onVerified }: OTPModalProps) {
                 : `We sent a code to +91${phone}`}
             </p>
 
-            {error && (
+            {error ? (
               <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</div>
-            )}
+            ) : null}
 
             {step === 'phone' ? (
               <div className="space-y-4">
@@ -123,7 +61,7 @@ export default function OTPModal({ onClose, onVerified }: OTPModalProps) {
                   />
                 </div>
                 <button
-                  onClick={handleSendOTP}
+                  onClick={sendOTP}
                   disabled={loading}
                   className="min-h-12 w-full rounded-full bg-green-600 px-6 text-base font-medium text-white active:bg-green-700 transition-colors disabled:opacity-50"
                 >
@@ -142,7 +80,7 @@ export default function OTPModal({ onClose, onVerified }: OTPModalProps) {
                   autoFocus
                 />
                 <button
-                  onClick={handleVerifyOTP}
+                  onClick={verifyOTP}
                   disabled={loading}
                   className="min-h-12 w-full rounded-full bg-green-600 px-6 text-base font-medium text-white active:bg-green-700 transition-colors disabled:opacity-50"
                 >

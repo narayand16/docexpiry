@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { computeStatus } from "@/lib/status";
 
 export async function PUT(
   request: Request,
@@ -63,7 +64,7 @@ export async function PUT(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ document: data });
+  return NextResponse.json({ document: { ...data, status: computeStatus(data.expiry_date) } });
 }
 
 export async function DELETE(

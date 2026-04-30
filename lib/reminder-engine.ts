@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/server";
-import { sendWhatsAppMessage } from "@/lib/twilio";
+import { sendWhatsAppReminder } from "@/lib/msg91";
 import { ReminderType } from "@/types";
 
 interface DocumentWithReminder {
@@ -15,32 +15,6 @@ interface DocumentWithReminder {
   remind_1_day: boolean;
 }
 
-function getReminderMessage(
-  docName: string,
-  businessName: string,
-  expiryDate: string,
-  reminderType: ReminderType,
-): string {
-  const date = new Date(expiryDate).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-
-  switch (reminderType) {
-    case "90_days":
-      return `Hi! 📋 Your *${docName}* for ${businessName} expires on ${date}.\nThat's 3 months away — a good time to start the renewal process.\nReply STOP to opt out. — DocExpiry`;
-    case "30_days":
-      return `⚠️ Heads up: *${docName}* for ${businessName} expires on ${date}.\n30 days left. Initiate renewal to avoid last-minute stress.\n— DocExpiry`;
-    case "7_days":
-      return `🚨 *${docName}* expires in 7 days (${date}).\nOperating without a valid license can mean fines or closure.\nRenew immediately. — DocExpiry`;
-    case "1_day":
-      return `🚨 FINAL REMINDER: *${docName}* expires TOMORROW (${date}).\nPlease take action today. — DocExpiry`;
-    case "expired":
-      return `❌ *${docName}* for ${businessName} expired on ${date}.\nRenew urgently to avoid penalties. — DocExpiry`;
-  }
-}
-
 export async function processReminders() {
   return await processRemindersManual();
 }
@@ -48,14 +22,12 @@ export async function processReminders() {
 function getReminderTypesForDocument(
   doc: DocumentWithReminder,
 ): ReminderType[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const expiry = new Date(doc.expiry_date);
-  expiry.setHours(0, 0, 0, 0);
+  const now = new Date();
+  const todayStr = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
+  const todayMs = Date.parse(todayStr + 'T00:00:00Z');
+  const expiryMs = Date.parse(doc.expiry_date + 'T00:00:00Z');
 
-  const diffDays = Math.round(
-    (expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-  );
+  const diffDays = Math.round((expiryMs - todayMs) / (1000 * 60 * 60 * 24));
 
   const types: ReminderType[] = [];
   if (diffDays === 90) types.push("90_days");
@@ -87,12 +59,12 @@ function shouldSendReminder(
 
 async function processRemindersManual() {
   const supabase = await createServiceClient();
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const now = new Date();
+  const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 
   const targetDates = [90, 30, 7, 1, 0, -1, -2, -3].map((offset) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + offset);
+    const d = new Date(todayUTC);
+    d.setUTCDate(d.getUTCDate() + offset);
     return d.toISOString().split("T")[0];
   });
 
@@ -154,13 +126,16 @@ async function processRemindersManual() {
       if (!shouldSendReminder(docWithReminder, reminderType)) continue;
 
       try {
-        const message = getReminderMessage(
-          doc.name,
-          business.name,
-          doc.expiry_date,
-          reminderType,
-        );
-        await sendWhatsAppMessage(prefs.phone_number, message);
+        const expiryFormatted = new Date(doc.expiry_date).toLocaleDateString("en-IN", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        });
+        await sendWhatsAppReminder(prefs.phone_number, {
+          docName: doc.name,
+          businessName: business.name,
+          expiryDate: expiryFormatted,
+        });
 
         await supabase.from("reminder_log").insert({
           document_id: doc.id,

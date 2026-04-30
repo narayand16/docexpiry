@@ -10,7 +10,7 @@ const statusConfig: Record<DocumentStatus, { label: string; color: string; emoji
 }
 
 export default function StatusBadge({ status }: { status: DocumentStatus }) {
-  const config = statusConfig[status]
+  const config = statusConfig[status] ?? { label: status ?? 'Unknown', color: 'bg-gray-100 text-gray-600', emoji: '⚪' }
   return (
     <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${config.color}`}>
       <span>{config.emoji}</span>

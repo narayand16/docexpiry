@@ -64,9 +64,9 @@ export async function POST(request: Request) {
     .from("businesses")
     .insert({
       user_id: user.id,
-      name: String(name).slice(0, 200),
+      name: String(name).trim().slice(0, 200),
       type,
-      city: city ? String(city).slice(0, 100) : null,
+      city: city ? String(city).trim().slice(0, 100) : null,
     })
     .select()
     .single();

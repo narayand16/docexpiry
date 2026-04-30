@@ -19,14 +19,6 @@ CREATE TABLE documents (
   expiry_date  DATE NOT NULL,
   issued_by    TEXT,
   notes        TEXT,
-  status       TEXT GENERATED ALWAYS AS (
-    CASE
-      WHEN expiry_date < CURRENT_DATE              THEN 'expired'
-      WHEN expiry_date <= CURRENT_DATE + 30        THEN 'critical'
-      WHEN expiry_date <= CURRENT_DATE + 90        THEN 'upcoming'
-      ELSE                                              'safe'
-    END
-  ) STORED,
   created_at   TIMESTAMPTZ DEFAULT NOW(),
   updated_at   TIMESTAMPTZ DEFAULT NOW()
 );

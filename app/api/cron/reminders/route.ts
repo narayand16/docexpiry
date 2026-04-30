@@ -1,12 +1,22 @@
 import { processReminders } from "@/lib/reminder-engine";
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 
 export async function POST(request: Request) {
-  // Verify cron secret
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret) {
+    console.error("CRON_SECRET is not configured");
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const expected = `Bearer ${cronSecret}`;
+  const isValid =
+    authHeader?.length === expected.length &&
+    timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
+
+  if (!isValid) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

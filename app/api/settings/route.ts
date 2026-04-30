@@ -50,8 +50,8 @@ export async function PUT(request: Request) {
     );
   }
 
-  // Basic phone validation
-  const phoneRegex = /^\+\d{10,15}$/;
+  // E.164 phone validation (Indian numbers: +91 + 10 digits)
+  const phoneRegex = /^\+91\d{10}$/;
   if (!phoneRegex.test(phone_number)) {
     return NextResponse.json(
       { error: "Invalid phone number format" },

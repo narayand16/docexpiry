@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { computeStatus } from "@/lib/status";
 
 export async function GET() {
   const supabase = await createClient();
@@ -33,7 +34,8 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ documents: data ?? [] });
+  const documents = (data ?? []).map((doc) => ({ ...doc, status: computeStatus(doc.expiry_date) }));
+  return NextResponse.json({ documents });
 }
 
 export async function POST(request: Request) {
@@ -78,10 +80,10 @@ export async function POST(request: Request) {
     .from("documents")
     .insert({
       business_id,
-      name: String(name).slice(0, 200),
+      name: String(name).trim().slice(0, 200),
       expiry_date,
-      issued_by: issued_by ? String(issued_by).slice(0, 200) : null,
-      notes: notes ? String(notes).slice(0, 500) : null,
+      issued_by: issued_by ? String(issued_by).trim().slice(0, 200) : null,
+      notes: notes ? String(notes).trim().slice(0, 500) : null,
     })
     .select()
     .single();
@@ -90,5 +92,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ document: data }, { status: 201 });
+  return NextResponse.json({ document: { ...data, status: computeStatus(data.expiry_date) } }, { status: 201 });
 }
